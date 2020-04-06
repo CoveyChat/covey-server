@@ -15,40 +15,66 @@ io.on('connection', function(socket){
     console.log('+ ' + socket.id + " connected");
     io.emit('chat message', 'testing here a message from the server!~!!!');
 
-    socket.on('setconnection', function(obj) {
-        rooms[socket.roomid].clients[socket.id].hostConn = obj.webRtcId;
-        rooms[socket.roomid].clients[socket.id].hostId = obj.hostid;
-
+    socket.on('bindtohost', function(obj) {
         console.log("Bound local connection for socket " + socket.id);
-
+        obj.signalId = socket.id;
+        console.log("Returning client the socket id of " + obj.signalId);
+        var hostBound = false;
         //Announce to all the sockets to open a new client webrtc connection
         for(var clientId in rooms[socket.roomid].clients) {
             var clientSocket = rooms[socket.roomid].clients[clientId];
             //Skip the initiator socket
-            if(clientSocket.id == socket.id) {
+            if(clientSocket.id == socket.id || hostBound) {
                 continue;
             }
 
-            clientSocket.emit('initclient', obj);
+            //This socket is already bound to you, don't be greedy
+            if(typeof rooms[socket.roomid].activePeerHosts[socket.id] != 'undefined'
+                && typeof rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id] != 'undefined'
+                && typeof rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id].hostid  != 'undefined'
+                && !rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id].hostid != obj.hostid
+                ) {
+
+                console.log("##TRIED TO SEND " + obj.hostid + " TO SOCKET " + clientSocket.id +
+                " BUT ITS ALREADY BOUND TO " + rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id].hostid);
+
+                continue;
+            }
+
+            //Init this socket activePeerHosts list
+            if(typeof rooms[socket.roomid].activePeerHosts[socket.id] == 'undefined') {
+                rooms[socket.roomid].activePeerHosts[socket.id] = {clients:{}};
+            }
+
+            //Init this socket clients reference
+            if(typeof rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id] == 'undefined') {
+                rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id] = {hostid: obj.hostid};
+                console.log("SENDING");
+                clientSocket.emit('initclient', obj);
+                hostBound=true;
+            }
+
+
+
+            console.log("!!!!!SOMETHING WENT WRONG!!!!");
+
         }
 
     });
 
 
     socket.on('bindconnection', function(obj) {
-        rooms[socket.roomid].clients[socket.id].clientConn = obj.webRtcId;
-        rooms[socket.roomid].clients[socket.id].clientId = obj.clientId;
-
         console.log("Bound local connection for socket " + socket.id);
 
         //Announce to all the sockets to open a new client webrtc connection
         for(var clientId in rooms[socket.roomid].clients) {
             var clientSocket = rooms[socket.roomid].clients[clientId];
             //Skip the initiator and any unready sockets
-            if(clientSocket.id == socket.id || clientSocket.hostConn == null) {
+            if(clientSocket.id == socket.id) {
                 //console.log("Skipped " + clientSocket.id + "  -  " + (clientSocket.hostConn == null ? "TRUE" : "FALSE"));
                 continue;
             }
+
             console.log("Sending client bind to host " + clientSocket.id);
             clientSocket.emit('bindtoclient', obj);
         }
@@ -58,7 +84,7 @@ io.on('connection', function(socket){
     socket.on('join', function(roomid){
         //Init the room if it's new
         if(typeof rooms[roomid] == 'undefined') {
-            rooms[roomid] = {id: roomid, clients:{}};
+            rooms[roomid] = {id: roomid, clients:{}, activePeerHosts: {}};
         }
 
         rooms[roomid].clients[socket.id] = socket;
@@ -69,95 +95,11 @@ io.on('connection', function(socket){
         var numConnections = Object.keys(rooms[roomid].clients).length;
 
         //Don't init the first connection since it has nowhere to go
-        for(var i=0;i<numConnections-1;i++) {
+        if(numConnections > 1) {
             socket.emit('inithosts', numConnections-1);
         }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/*
-        //Notify all the other clients about the new connection
-        if(Object.keys(rooms[roomid].clients).length > 0) {
-
-            var openConnection = false;
-
-            for(var clientId in rooms[roomid].clients) {
-                var client = rooms[roomid].clients[clientId];
-
-                //Exists but not ready connection
-                if(client.hostConn == null) {
-                    socket.emit('retry');
-                    return false;
-                }
-
-                //Join any hosts
-                console.log("Client with connectionstr: " + client.hostConn == null ? 'YES HAS A STRING' : 'NO STRING');
-                if(client.hostConn != null && client.id != socket.id) {
-                    console.log("~ Init Peer Conn to " + client.id);
-                    socket.emit('initclient', client.hostConn);
-                }
-
-                //Tell all the clients in this room about a new peer
-                //client.emit('inithost', client.webRtcId);
-            }
-        } else {
-            console.log("~ Init Host Conn");
-            //Become the first host
-            socket.emit('inithost', null);
-        }
-
-        rooms[roomid].clients[socket.id] = socket;*/
     });
-
-    //socket.on('setlocalconnection', function(webRtcId) {
-    //    rooms[socket.roomid].clients[socket.id].hostConn = webRtcId;
-    //    rooms[socket.roomid].clients[socket.id].remoteConn = null;
-    //    console.log("Bound local connection for socket " + socket.id);
-
-        //Announce to all the clients the new connection
-        /*if(Object.keys(rooms[socket.roomid].clients).length > 0) {
-            socket.emit('initclient', webRtcId);
-        }*/
-    //});
-
-
-    //socket.on('setremoteconnection', function(webRtcId) {
-    //    rooms[socket.roomid].clients[socket.id].remoteConn = webRtcId;
-    //    console.log("Bound remote connection for socket " + socket.id);
-
-        //Announce to all the clients the new connection
-        /*if(Object.keys(rooms[socket.roomid].clients).length > 0) {
-            socket.emit('initclient', webRtcId);
-        }*/
-    //});
 
     socket.on('disconnect', function(){
         var roomid = socket.roomid;
