@@ -1,25 +1,37 @@
 var app = require('express')();
 var http = require('http').createServer(app);
 var io = require('socket.io')(http);
+var request = require('request');
 
 var rooms = {};
+var api = {base: 'https://bevy.chat/'};
 
 app.get('/', function(req, res){
   res.sendFile(__dirname + '/index.html');
 });
 
 io.on('connection', function(socket){
-    socket.hostConn = null;
-    socket.remoteConn = null;
+    var addToRoom = function(roomid, user) {
+        rooms[roomid].clients[socket.id] = socket;
+        rooms[roomid].clients[socket.id].roomid = roomid;
+        console.log("+++ (" + (Object.keys(rooms[roomid].clients).length) + ")" + user.name + " joined room " + roomid);
 
-    console.log('+ ' + socket.id + " connected");
-    io.emit('chat message', 'testing here a message from the server!~!!!');
+        var numConnections = Object.keys(rooms[roomid].clients).length;
+        socket.user = user;
+        //Don't init the first connection since it has nowhere to go
+        if(numConnections > 1) {
+            socket.emit('inithosts', numConnections-1);
+        }
+    };
+
+    console.log("+ new socket connected");
 
     socket.on('bindtohost', function(obj) {
-        console.log("Bound local connection for socket " + socket.id);
+        console.log("+++ bound local connection for socket " + socket.id + " and returning to client");
         obj.signalId = socket.id;
-        console.log("Returning client the socket id of " + obj.signalId);
+        //console.log("Returning client the socket id of " + obj.signalId);
         var hostBound = false;
+
         //Announce to all the sockets to open a new client webrtc connection
         for(var clientId in rooms[socket.roomid].clients) {
             var clientSocket = rooms[socket.roomid].clients[clientId];
@@ -34,10 +46,8 @@ io.on('connection', function(socket){
                 && typeof rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id].hostid  != 'undefined'
                 && !rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id].hostid != obj.hostid
                 ) {
-
-                console.log("##TRIED TO SEND " + obj.hostid + " TO SOCKET " + clientSocket.id +
-                " BUT ITS ALREADY BOUND TO " + rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id].hostid);
-
+                //console.log("##TRIED TO SEND " + obj.hostid + " TO SOCKET " + clientSocket.id +
+                //" BUT ITS ALREADY BOUND TO " + rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id].hostid);
                 continue;
             }
 
@@ -49,14 +59,14 @@ io.on('connection', function(socket){
             //Init this socket clients reference
             if(typeof rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id] == 'undefined') {
                 rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id] = {hostid: obj.hostid};
-                console.log("SENDING");
+                console.log("+++ sending connection to initclient");
                 clientSocket.emit('initclient', obj);
                 hostBound=true;
             }
 
-
-
-            console.log("!!!!!SOMETHING WENT WRONG!!!!");
+            if(!hostBound) {
+                console.log("- No clients to bind this host to");
+            }
 
         }
 
@@ -64,39 +74,64 @@ io.on('connection', function(socket){
 
 
     socket.on('bindconnection', function(obj) {
-        console.log("Bound local connection for socket " + socket.id);
+        console.log("+++ bound local connection for socket " + socket.id);
 
         //Announce to all the sockets to open a new client webrtc connection
         for(var clientId in rooms[socket.roomid].clients) {
             var clientSocket = rooms[socket.roomid].clients[clientId];
             //Skip the initiator and any unready sockets
             if(clientSocket.id == socket.id) {
-                //console.log("Skipped " + clientSocket.id + "  -  " + (clientSocket.hostConn == null ? "TRUE" : "FALSE"));
                 continue;
             }
 
-            console.log("Sending client bind to host " + clientSocket.id);
+            console.log("+++ sending client bind to host " + clientSocket.id);
             clientSocket.emit('bindtoclient', obj);
         }
 
     });
 
-    socket.on('join', function(roomid){
+    socket.on('join', function(obj){
+        if(typeof obj.chatId == 'undefined') {
+            return false;
+        }
+        var roomid = obj.chatId;
+        var user = obj.user;
+
         //Init the room if it's new
         if(typeof rooms[roomid] == 'undefined') {
             rooms[roomid] = {id: roomid, clients:{}, activePeerHosts: {}};
         }
 
-        rooms[roomid].clients[socket.id] = socket;
-        rooms[roomid].clients[socket.id].roomid = roomid;
+        if(user.token != null) {
+            //Get the users details from their oAuth key. We don't trust the, to actually tell us their name / details
+            request({
+                url: api.base + 'api/1.0/users/whoami',
+                headers: {
+                    'Authorization': 'Bearer ' + user.token
+                },
+                rejectUnauthorized: false
+            }, function(err, res) {
+                if(err) {
+                  return false;
+                } else {
 
-        console.log("+++ (" + (Object.keys(rooms[roomid].clients).length) + ")" + socket.id + " joined room " + roomid);
+                    if(typeof res.body != 'undefined'
+                        && typeof res.body === 'string'
+                        && res.body != '') {
+                        user = JSON.parse(res.body);
+                    }
 
-        var numConnections = Object.keys(rooms[roomid].clients).length;
+                    addToRoom(roomid, user.data);
+                }
 
-        //Don't init the first connection since it has nowhere to go
-        if(numConnections > 1) {
-            socket.emit('inithosts', numConnections-1);
+          });
+        } else {
+            //Send over an anon user
+            addToRoom(roomid, {
+                id: null,
+                name: 'Anon Bird',
+                token: null
+            });
         }
 
     });
@@ -104,7 +139,7 @@ io.on('connection', function(socket){
     socket.on('disconnect', function(){
         var roomid = socket.roomid;
         delete rooms[roomid].clients[socket.id];
-        console.log("-- " + socket.id + ' disconnected from room ' + roomid);
+        console.log("- " + socket.user.name + ' disconnected from room ' + roomid);
     });
 });
 
