@@ -24,9 +24,16 @@ io.on('connection', function(socket){
         }
     };
 
+    var cleanUser = function(user) {
+        return {name: user.name};
+    };
+
     console.log("+ new socket connected");
 
     socket.on('bindtohost', function(obj) {
+        //Add the user details to the response object
+        obj.user = cleanUser(socket.user);
+
         console.log("+++ bound local connection for socket " + socket.id + " and returning to client");
         obj.signalId = socket.id;
         //console.log("Returning client the socket id of " + obj.signalId);
@@ -73,7 +80,14 @@ io.on('connection', function(socket){
     });
 
 
+    /**
+     * Fires when a client has recieved the host connection
+     * and is now sending it's own connection details to the host
+     */
     socket.on('bindconnection', function(obj) {
+        //Add the user details to the response object
+        obj.user = cleanUser(socket.user);
+
         console.log("+++ bound local connection for socket " + socket.id);
 
         //Announce to all the sockets to open a new client webrtc connection
