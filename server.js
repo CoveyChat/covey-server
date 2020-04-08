@@ -25,7 +25,7 @@ io.on('connection', function(socket){
     };
 
     var cleanUser = function(user) {
-        return {name: user.name};
+        return {name: user.name, verified: (user.id != null)};
     };
 
     console.log("+ new socket connected");
