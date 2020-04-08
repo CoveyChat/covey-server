@@ -1,6 +1,13 @@
+var fs = require('fs');
+
+var options = {
+    key: fs.readFileSync('./file.pem'),
+    cert: fs.readFileSync('./file.crt')
+};
+
 var app = require('express')();
-var http = require('http').createServer(app);
-var io = require('socket.io')(http);
+var https = require('https').createServer(options, app);
+var io = require('socket.io')(https);
 var request = require('request');
 
 var rooms = {};
@@ -152,11 +159,18 @@ io.on('connection', function(socket){
 
     socket.on('disconnect', function(){
         var roomid = socket.roomid;
-        delete rooms[roomid].clients[socket.id];
-        console.log("- " + socket.user.name + ' disconnected from room ' + roomid);
+
+        if(typeof rooms[roomid] != 'undefined' && typeof rooms[roomid].clients != 'undefined') {
+            delete rooms[roomid].clients[socket.id];
+            console.log("- " + socket.user.name + ' disconnected from room ' + roomid);
+        } else {
+            console.log("!!! Room " + roomid + " clients dont exist");
+        }
+
+
     });
 });
 
-http.listen(1337, function(){
+https.listen(1337, function(){
   console.log('listening on *:1337');
 });
