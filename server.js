@@ -18,10 +18,13 @@ app.get('/', function(req, res){
 });
 
 io.on('connection', function(socket){
+    //Hold a map this socket is hosting / is a client of
+    socket.peerMap = {};
+
     var addToRoom = function(roomid, user) {
         rooms[roomid].clients[socket.id] = socket;
         rooms[roomid].clients[socket.id].roomid = roomid;
-        console.log("+++ (" + (Object.keys(rooms[roomid].clients).length) + ")" + user.name + " joined room " + roomid);
+        console.log("+++ (" + (Object.keys(rooms[roomid].clients).length) + ") " + user.name + " joined room " + roomid);
 
         var numConnections = Object.keys(rooms[roomid].clients).length;
         socket.user = user;
@@ -37,13 +40,16 @@ io.on('connection', function(socket){
 
     console.log("+ new socket connected");
 
-    socket.on('bindtohost', function(obj) {
+    socket.on('sendtoclient', function(obj) {
+        if(typeof socket.peerMap[obj.hostid] == 'undefined') {
+            socket.peerMap[obj.hostid] = null;
+        }
+
         //Add the user details to the response object
         obj.user = cleanUser(socket.user);
 
-        console.log("+++ bound local connection for socket " + socket.id + " and returning to client");
-        obj.signalId = socket.id;
-        //console.log("Returning client the socket id of " + obj.signalId);
+        console.log("+++ got connection for socket " + socket.id + " and relaying to a client");
+
         var hostBound = false;
 
         //Announce to all the sockets to open a new client webrtc connection
@@ -51,6 +57,7 @@ io.on('connection', function(socket){
             var clientSocket = rooms[socket.roomid].clients[clientId];
             //Skip the initiator socket
             if(clientSocket.id == socket.id || hostBound) {
+                //console.log("SKIPPING SENDER SOCKET");
                 continue;
             }
 
@@ -58,11 +65,17 @@ io.on('connection', function(socket){
             if(typeof rooms[socket.roomid].activePeerHosts[socket.id] != 'undefined'
                 && typeof rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id] != 'undefined'
                 && typeof rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id].hostid  != 'undefined'
-                && !rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id].hostid != obj.hostid
                 ) {
-                //console.log("##TRIED TO SEND " + obj.hostid + " TO SOCKET " + clientSocket.id +
-                //" BUT ITS ALREADY BOUND TO " + rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id].hostid);
-                continue;
+                //Send back to a specific client
+                if(rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id].hostid == obj.hostid) {
+                    console.log("+---> sending existing client connection to host id " + obj.hostid);
+                    clientSocket.emit('initclient', obj);
+                    break;
+                } else {
+                    //console.log("##TRIED TO SEND '" + obj.hostid + "' TO SOCKET " + clientSocket.id +
+                    //" BUT ITS ALREADY BOUND TO '" + rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id].hostid + "'");
+                    continue;
+                }
             }
 
             //Init this socket activePeerHosts list
@@ -73,7 +86,7 @@ io.on('connection', function(socket){
             //Init this socket clients reference
             if(typeof rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id] == 'undefined') {
                 rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id] = {hostid: obj.hostid};
-                console.log("+++ sending connection to initclient");
+                console.log("?---> picking a random client and sending connection to initclient for host id " + obj.hostid);
                 clientSocket.emit('initclient', obj);
                 hostBound=true;
             }
@@ -91,7 +104,7 @@ io.on('connection', function(socket){
      * Fires when a client has recieved the host connection
      * and is now sending it's own connection details to the host
      */
-    socket.on('bindconnection', function(obj) {
+    socket.on('sendtohost', function(obj) {
         //Add the user details to the response object
         obj.user = cleanUser(socket.user);
 
@@ -105,10 +118,25 @@ io.on('connection', function(socket){
                 continue;
             }
 
-            console.log("+++ sending client bind to host " + clientSocket.id);
-            clientSocket.emit('bindtoclient', obj);
+            if(typeof clientSocket.peerMap[obj.hostid] != 'undefined') {
+                console.log("+++ sending client bind to host " + clientSocket.id);
+                clientSocket.emit('sendtohost', obj);
+            } else {
+                console.log("!!! COULDNT FIND HOST TO REPLY BACK TO " + clientSocket.id);
+            }
+
+
         }
 
+    });
+
+    socket.on('initstreams', function() {
+        console.log("///// sending stream re-init all clients in room " + socket.roomid);
+        //Announce to all the sockets to open a new client webrtc connection
+        for(var clientId in rooms[socket.roomid].clients) {
+            var clientSocket = rooms[socket.roomid].clients[clientId];
+            clientSocket.emit('initstreams');
+        }
     });
 
     socket.on('join', function(obj){
