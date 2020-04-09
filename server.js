@@ -5,7 +5,7 @@ if (dotenv.error) {console.log("Could not find env file!\n\n");throw dotenv.erro
 var serverOptions = {
     key: fs.readFileSync(process.env.SSL_KEY_PATH),
     cert: fs.readFileSync(process.env.SSL_CERT_PATH),
-    port: 1337
+    port: process.env.PORT
 };
 
 var app = require('express')();
