@@ -1,21 +1,20 @@
 var fs = require('fs');
+var dotenv = require('dotenv').config();
+if (dotenv.error) {console.log("Could not find env file!\n\n");throw dotenv.error}
 
-var options = {
-    key: fs.readFileSync('./file.pem'),
-    cert: fs.readFileSync('./file.crt')
+var serverOptions = {
+    key: fs.readFileSync(process.env.SSL_KEY_PATH),
+    cert: fs.readFileSync(process.env.SSL_CERT_PATH),
+    port: 1337
 };
 
 var app = require('express')();
-var https = require('https').createServer(options, app);
+var https = require('https').createServer(serverOptions, app);
 var io = require('socket.io')(https);
 var request = require('request');
 
 var rooms = {};
 var api = {base: 'https://bevy.chat/'};
-
-app.get('/', function(req, res){
-  res.sendFile(__dirname + '/index.html');
-});
 
 io.on('connection', function(socket){
     //Hold a map this socket is hosting / is a client of
@@ -198,6 +197,6 @@ io.on('connection', function(socket){
     });
 });
 
-https.listen(1337, function(){
-  console.log('listening on *:1337');
+https.listen(serverOptions.port, function(){
+  console.log('listening on *:' + serverOptions.port);
 });
