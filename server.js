@@ -20,11 +20,12 @@ app.get('/', function(req, res){
 io.on('connection', function(socket){
     //Hold a map this socket is hosting / is a client of
     socket.peerMap = {};
+    console.log("+ new socket connected");
 
     var addToRoom = function(roomid, user) {
         rooms[roomid].clients[socket.id] = socket;
         rooms[roomid].clients[socket.id].roomid = roomid;
-        console.log("+++ (" + (Object.keys(rooms[roomid].clients).length) + ") " + user.name + " joined room " + roomid);
+        console.log("+++++ (" + (Object.keys(rooms[roomid].clients).length) + ") " + user.name + " joined room " + roomid);
 
         var numConnections = Object.keys(rooms[roomid].clients).length;
         socket.user = user;
@@ -38,8 +39,6 @@ io.on('connection', function(socket){
         return {name: user.name, verified: (user.id != null)};
     };
 
-    console.log("+ new socket connected");
-
     socket.on('sendtoclient', function(obj) {
         if(typeof socket.peerMap[obj.hostid] == 'undefined') {
             socket.peerMap[obj.hostid] = null;
@@ -47,8 +46,6 @@ io.on('connection', function(socket){
 
         //Add the user details to the response object
         obj.user = cleanUser(socket.user);
-
-        console.log("+++ got connection for socket " + socket.id + " and relaying to a client");
 
         var hostBound = false;
 
@@ -68,7 +65,8 @@ io.on('connection', function(socket){
                 ) {
                 //Send back to a specific client
                 if(rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id].hostid == obj.hostid) {
-                    console.log("+---> sending existing client connection to host id " + obj.hostid);
+                    console.log("+---> sending existing connection for host id " + obj.hostid);
+                    socket.peerMap[obj.hostid] = clientSocket.id;
                     clientSocket.emit('initclient', obj);
                     break;
                 } else {
@@ -87,12 +85,13 @@ io.on('connection', function(socket){
             if(typeof rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id] == 'undefined') {
                 rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id] = {hostid: obj.hostid};
                 console.log("?---> picking a random client and sending connection to initclient for host id " + obj.hostid);
+                socket.peerMap[obj.hostid] = clientSocket.id;
                 clientSocket.emit('initclient', obj);
                 hostBound=true;
             }
 
             if(!hostBound) {
-                console.log("- No clients to bind this host to");
+                console.log("!!!!! No clients to bind this host to");
             }
 
         }
@@ -108,8 +107,7 @@ io.on('connection', function(socket){
         //Add the user details to the response object
         obj.user = cleanUser(socket.user);
 
-        console.log("+++ bound local connection for socket " + socket.id);
-
+        var responded = false;
         //Announce to all the sockets to open a new client webrtc connection
         for(var clientId in rooms[socket.roomid].clients) {
             var clientSocket = rooms[socket.roomid].clients[clientId];
@@ -119,13 +117,14 @@ io.on('connection', function(socket){
             }
 
             if(typeof clientSocket.peerMap[obj.hostid] != 'undefined') {
-                console.log("+++ sending client bind to host " + clientSocket.id);
+                console.log("<---+ sending client " + obj.clientid + " to host " + obj.hostid);
+                responded = true;
                 clientSocket.emit('sendtohost', obj);
-            } else {
-                console.log("!!! COULDNT FIND HOST TO REPLY BACK TO " + clientSocket.id);
             }
+        }
 
-
+        if(!responded) {
+            console.log("!---! COULDNT FIND HOST " + obj.hostid + " TO REPLY BACK TO " + obj.clientid);
         }
 
     });
@@ -178,7 +177,7 @@ io.on('connection', function(socket){
             //Send over an anon user
             addToRoom(roomid, {
                 id: null,
-                name: 'Anon Bird',
+                name: 'anonymous',
                 token: null
             });
         }
@@ -190,9 +189,9 @@ io.on('connection', function(socket){
 
         if(typeof rooms[roomid] != 'undefined' && typeof rooms[roomid].clients != 'undefined') {
             delete rooms[roomid].clients[socket.id];
-            console.log("- " + socket.user.name + ' disconnected from room ' + roomid);
+            console.log("----- " + socket.user.name + ' disconnected from room ' + roomid);
         } else {
-            console.log("!!! Room " + roomid + " clients dont exist");
+            console.log("!!!!! Room " + roomid + " clients dont exist");
         }
 
 
