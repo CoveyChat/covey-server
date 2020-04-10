@@ -35,7 +35,7 @@ io.on('connection', function(socket){
     };
 
     var cleanUser = function(user) {
-        return {name: user.name, verified: (user.id != null)};
+        return {name: user.name, verified: user.verified};
     };
 
     socket.on('sendtoclient', function(obj) {
@@ -166,6 +166,9 @@ io.on('connection', function(socket){
                         && typeof res.body === 'string'
                         && res.body != '') {
                         user = JSON.parse(res.body);
+                        user.data.verified = true;
+                    } else {
+                        console.log("Something went horribly wrong with the api auth");
                     }
 
                     addToRoom(roomid, user.data);
@@ -173,11 +176,20 @@ io.on('connection', function(socket){
 
           });
         } else {
+            var username = "anonymous";
+
+            //Take in the supplied username
+            if(typeof obj.user != 'undefined' &&
+                typeof obj.user.name != 'undefined') {
+                username = obj.user.name;
+            }
+
             //Send over an anon user
             addToRoom(roomid, {
                 id: null,
-                name: 'anonymous',
-                token: null
+                name: username,
+                token: null,
+                verified: false
             });
         }
 
