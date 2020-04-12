@@ -170,9 +170,11 @@ io.on('connection', function(socket){
                             user.data.verified = true;
                         } catch(e) {
                             console.log("Tried to read user data but recieved malformed JSON response");
+                            return false;
                         }
                     } else {
                         console.log("Something went horribly wrong with the api auth");
+                        return false;
                     }
 
                     addToRoom(roomid, user.data);
