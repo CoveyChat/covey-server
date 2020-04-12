@@ -43,8 +43,6 @@ io.on('connection', function(socket){
             socket.peerMap[obj.hostid] = null;
         }
 
-        //Add the user details to the response object
-        obj.user = cleanUser(socket.user);
 
         var hostBound = false;
 
@@ -66,6 +64,9 @@ io.on('connection', function(socket){
                 if(rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id].hostid == obj.hostid) {
                     console.log("+---> sending existing connection for host id " + obj.hostid);
                     socket.peerMap[obj.hostid] = clientSocket.id;
+                    //Add the user details to the response object
+                    obj.user = cleanUser(socket.user);
+
                     clientSocket.emit('initclient', obj);
                     break;
                 } else {
@@ -85,6 +86,10 @@ io.on('connection', function(socket){
                 rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id] = {hostid: obj.hostid};
                 console.log("?---> picking a random client and sending connection to initclient for host id " + obj.hostid);
                 socket.peerMap[obj.hostid] = clientSocket.id;
+
+                //Add the user details to the response object
+                obj.user = cleanUser(socket.user);
+
                 clientSocket.emit('initclient', obj);
                 hostBound=true;
             }
