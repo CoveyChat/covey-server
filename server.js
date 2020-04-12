@@ -65,7 +65,7 @@ io.on('connection', function(socket){
                     console.log("+---> sending existing connection for host id " + obj.hostid);
                     socket.peerMap[obj.hostid] = clientSocket.id;
                     //Add the user details to the response object
-                    obj.user = cleanUser(socket.user);
+                    obj.user = cleanUser(clientSocket.user);
 
                     clientSocket.emit('initclient', obj);
                     break;
@@ -88,7 +88,7 @@ io.on('connection', function(socket){
                 socket.peerMap[obj.hostid] = clientSocket.id;
 
                 //Add the user details to the response object
-                obj.user = cleanUser(socket.user);
+                obj.user = cleanUser(clientSocket.user);
 
                 clientSocket.emit('initclient', obj);
                 hostBound=true;
