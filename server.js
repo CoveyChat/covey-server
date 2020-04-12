@@ -165,8 +165,12 @@ io.on('connection', function(socket){
                     if(typeof res.body != 'undefined'
                         && typeof res.body === 'string'
                         && res.body != '') {
-                        user = JSON.parse(res.body);
-                        user.data.verified = true;
+                        try {
+                            user = JSON.parse(res.body);
+                            user.data.verified = true;
+                        } catch(e) {
+                            console.log("Tried to read user data but recieved malformed JSON response");
+                        }
                     } else {
                         console.log("Something went horribly wrong with the api auth");
                     }
