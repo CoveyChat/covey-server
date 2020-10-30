@@ -14,17 +14,27 @@ var io = require('socket.io')(https);
 var request = require('request');
 
 var rooms = {};
-var api = {base: 'https://bevy.chat/'};
+var api = {base: process.env.API_BASE};
+
+function log(msg) {
+    let now = new Date();
+    let dateString = '';
+
+    dateString += "[" + now.getFullYear() + "-" + (now.getMonth() + 1).toString().padStart(2, '0') + "-" + now.getDate().toString().padStart(2, '0');
+    dateString += " " + now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0') + ":" + now.getSeconds().toString().padStart(2, '0') + "] ";
+
+    console.log(dateString + msg);
+}
 
 io.on('connection', function(socket){
     //Hold a map this socket is hosting / is a client of
     socket.peerMap = {};
-    console.log("+ new socket connected");
+    log("+ new socket connected");
 
     var addToRoom = function(roomid, user) {
         rooms[roomid].clients[socket.id] = socket;
         rooms[roomid].clients[socket.id].roomid = roomid;
-        console.log("+++++ (" + (Object.keys(rooms[roomid].clients).length) + ") " + user.name + " joined room " + roomid);
+        log("+++++ (" + (Object.keys(rooms[roomid].clients).length) + ") " + user.name + " joined room " + roomid);
 
         var numConnections = Object.keys(rooms[roomid].clients).length;
         socket.user = user;
@@ -53,7 +63,7 @@ io.on('connection', function(socket){
             var clientSocket = rooms[socket.roomid].clients[clientId];
             //Skip the initiator socket
             if(clientSocket.id == socket.id || hostBound) {
-                //console.log("SKIPPING SENDER SOCKET");
+                //log("SKIPPING SENDER SOCKET");
                 continue;
             }
 
@@ -64,12 +74,12 @@ io.on('connection', function(socket){
                 ) {
                 //Send back to a specific client
                 if(rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id].hostid == obj.hostid) {
-                    console.log("+---> sending existing connection for host id " + obj.hostid);
+                    log("+---> sending existing connection for host id " + obj.hostid);
                     socket.peerMap[obj.hostid] = clientSocket.id;
                     clientSocket.emit('initclient', obj);
                     break;
                 } else {
-                    //console.log("##TRIED TO SEND '" + obj.hostid + "' TO SOCKET " + clientSocket.id +
+                    //log("##TRIED TO SEND '" + obj.hostid + "' TO SOCKET " + clientSocket.id +
                     //" BUT ITS ALREADY BOUND TO '" + rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id].hostid + "'");
                     continue;
                 }
@@ -83,14 +93,14 @@ io.on('connection', function(socket){
             //Init this socket clients reference
             if(typeof rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id] == 'undefined') {
                 rooms[socket.roomid].activePeerHosts[socket.id].clients[clientSocket.id] = {hostid: obj.hostid};
-                console.log("?---> picking a random client and sending connection to initclient for host id " + obj.hostid);
+                log("?---> picking a random client and sending connection to initclient for host id " + obj.hostid);
                 socket.peerMap[obj.hostid] = clientSocket.id;
                 clientSocket.emit('initclient', obj);
                 hostBound=true;
             }
 
             if(!hostBound) {
-                console.log("!!!!! No clients to bind this host to");
+                log("!!!!! No clients to bind this host to");
             }
 
         }
@@ -116,20 +126,20 @@ io.on('connection', function(socket){
             }
 
             if(typeof clientSocket.peerMap[obj.hostid] != 'undefined') {
-                console.log("<---+ sending client " + obj.clientid + " to host " + obj.hostid);
+                log("<---+ sending client " + obj.clientid + " to host " + obj.hostid);
                 responded = true;
                 clientSocket.emit('sendtohost', obj);
             }
         }
 
         if(!responded) {
-            console.log("!---! COULDNT FIND HOST " + obj.hostid + " TO REPLY BACK TO " + obj.clientid);
+            log("!---! COULDNT FIND HOST " + obj.hostid + " TO REPLY BACK TO " + obj.clientid);
         }
 
     });
 
     socket.on('initstreams', function() {
-        console.log("///// sending stream re-init all clients in room " + socket.roomid);
+        log("///// sending stream re-init all clients in room " + socket.roomid);
         //Announce to all the sockets to open a new client webrtc connection
         for(var clientId in rooms[socket.roomid].clients) {
             var clientSocket = rooms[socket.roomid].clients[clientId];
@@ -169,11 +179,11 @@ io.on('connection', function(socket){
                             user = JSON.parse(res.body);
                             user.data.verified = true;
                         } catch(e) {
-                            console.log("Tried to read user data but recieved malformed JSON response");
+                            log("Tried to read user data but recieved malformed JSON response");
                             return false;
                         }
                     } else {
-                        console.log("Something went horribly wrong with the api auth");
+                        log("Something went horribly wrong with the api auth");
                         return false;
                     }
 
@@ -206,9 +216,9 @@ io.on('connection', function(socket){
 
         if(typeof rooms[roomid] != 'undefined' && typeof rooms[roomid].clients != 'undefined') {
             delete rooms[roomid].clients[socket.id];
-            console.log("----- " + socket.user.name + ' disconnected from room ' + roomid);
+            log("----- " + socket.user.name + ' disconnected from room ' + roomid);
         } else {
-            console.log("!!!!! Room " + roomid + " clients dont exist");
+            log("!!!!! Room " + roomid + " clients dont exist");
         }
 
 
@@ -216,5 +226,5 @@ io.on('connection', function(socket){
 });
 
 https.listen(serverOptions.port, function(){
-  console.log('listening on *:' + serverOptions.port);
+  log('listening on *:' + serverOptions.port);
 });
