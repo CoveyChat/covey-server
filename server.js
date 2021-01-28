@@ -160,7 +160,7 @@ io.on('connection', function(socket){
         }
 
         if(user.token != null) {
-            //Get the users details from their oAuth key. We don't trust the, to actually tell us their name / details
+            //Get the users details from their oAuth key. We don't trust them, to actually tell us their name / details
             request({
                 url: api.base + 'api/1.0/users/whoami',
                 headers: {
@@ -176,7 +176,8 @@ io.on('connection', function(socket){
                         && typeof res.body === 'string'
                         && res.body != '') {
                         try {
-                            user = JSON.parse(res.body);
+                            let tmp = JSON.parse(res.body);
+                            user.data = tmp.data.user;
                             user.data.verified = true;
                         } catch(e) {
                             log("Tried to read user data but recieved malformed JSON response");
