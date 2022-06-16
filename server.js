@@ -14,7 +14,7 @@ var io = require('socket.io')(https);
 var request = require('request');
 
 var rooms = {};
-var api = {base: process.env.API_BASE};
+var api = { base: process.env.API_BASE };
 
 function log(msg) {
     let now = new Date();
@@ -177,7 +177,7 @@ io.on('connection', function(socket){
                         && res.body != '') {
                         try {
                             let tmp = JSON.parse(res.body);
-                            user.data = tmp.data.user;
+                            user.data = tmp.user;
                             user.data.verified = true;
                         } catch(e) {
                             log("Tried to read user data but recieved malformed JSON response");
